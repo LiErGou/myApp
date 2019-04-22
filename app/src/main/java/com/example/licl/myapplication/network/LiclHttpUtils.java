@@ -3,6 +3,8 @@ package com.example.licl.myapplication.network;
 import android.os.Handler;
 import android.os.Looper;
 
+import com.alibaba.fastjson.JSONObject;
+
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.Map;
@@ -11,8 +13,10 @@ import java.util.concurrent.TimeUnit;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.FormBody;
+import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class LiclHttpUtils {
@@ -23,6 +27,7 @@ public class LiclHttpUtils {
     private int WRITE_TIME_OUT=10;
     private int READ_TIME_OUT=30;
     private Handler mHandler;
+    public static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
     private LiclHttpUtils(){
         mOkHttpClient=new OkHttpClient.Builder()
                 .connectTimeout(CONNECT_TIME_OUT,TimeUnit.SECONDS)
@@ -92,6 +97,18 @@ public class LiclHttpUtils {
         return _postSyn(url, map).body().string();
     }
 
+    private Response _postSyn(String url,String json) throws IOException{
+        Response response=mOkHttpClient.newCall(buildPostRequest(url,json)).execute();
+        return response;
+    }
+
+    private String _postSynString(String url,String json) throws IOException{
+        return _postSyn(url,json).body().string();
+    }
+
+    private <T> Response _postSyn(String url,T t) throws IOException{
+        return mOkHttpClient.newCall(buildPostRequest(url,t)).execute();
+    }
     /**
      * 异步的post请求
      * @param url
@@ -106,6 +123,17 @@ public class LiclHttpUtils {
     private void _postAsyn(String url,final ResultCallback callback,Map<String,String> params){
         _postAsyn(url, callback, map2Params(params));
     }
+
+    private void _postAsyn(String url,final ResultCallback callback,String json){
+        Request request=buildPostRequest(url, json);
+        deliveryResult(callback,request);
+    }
+
+    private <T> void _postAsyn(String url,final ResultCallback callback,T t){
+        _postAsyn(url,callback,JSONObject.toJSONString(t));
+    }
+
+
 
     /**
      * 构造post请求
@@ -123,6 +151,20 @@ public class LiclHttpUtils {
         }
         FormBody body=builder.build();
         return new Request.Builder().url(url).post(body).build();
+    }
+
+    private Request buildPostRequest(String url,String json){
+        RequestBody body=RequestBody.create(JSON,json);
+        Request request=new Request.Builder()
+                .url(url)
+                .post(body)
+                .build();
+        return request;
+    }
+
+    private <T> Request buildPostRequest(String url,T t){
+        String JSONString= JSONObject.toJSONString(t);
+        return buildPostRequest(url,JSONString);
     }
 
     private Param[] map2Params(Map<String,String> params){
@@ -240,6 +282,17 @@ public class LiclHttpUtils {
         getInstance()._postAsyn(url,callback,map);
     }
 
+    public static void postAsyn(String url,ResultCallback callback,String json){
+        getInstance()._postAsyn(url, callback, json);
+    }
+
+    public static <T> void postAsyn(String url,ResultCallback callback,T t){
+        getInstance()._postAsyn(url,callback,t);
+    }
+
+
+
+
     /**
      * 同步的post请求
      * @param url
@@ -261,6 +314,22 @@ public class LiclHttpUtils {
 
     public static String postSynString(String url,Map<String,String> map) throws IOException{
         return getInstance()._postSynString(url,map);
+    }
+
+    public static Response postSyn(String url,String json) throws IOException {
+        return getInstance()._postSyn(url,json);
+    }
+
+    public static String postSynString(String url,String json) throws IOException{
+        return getInstance()._postSynString(url,json);
+    }
+
+    public static <T> Response postSyn(String url,T t) throws IOException {
+        return getInstance()._postSyn(url,t);
+    }
+
+    public static <T> String postSynString(String url,T t) throws IOException{
+        return getInstance()._postSyn(url,t).body().string();
     }
 
 }

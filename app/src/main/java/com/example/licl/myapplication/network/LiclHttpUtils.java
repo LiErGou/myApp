@@ -6,7 +6,6 @@ import android.os.Looper;
 import com.alibaba.fastjson.JSONObject;
 
 import java.io.IOException;
-import java.lang.reflect.Type;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -177,7 +176,7 @@ public class LiclHttpUtils {
         return res;
     }
 
-    private void deliveryResult(final ResultCallback resultCallback,Request request){
+    private  void deliveryResult(final ResultCallback resultCallback,Request request){
         mOkHttpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
@@ -186,7 +185,13 @@ public class LiclHttpUtils {
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
-                sendSuccessCallBack(resultCallback,response);
+                Class clazz=resultCallback.getType();
+                if(clazz==String.class){
+                    sendSuccessCallBackString(resultCallback,response.body().string());
+                }else{
+                    sendSuccessCallBack(resultCallback,JSONObject.parseObject(response.body().string(),clazz));
+                }
+
             }
         });
     }
@@ -204,7 +209,18 @@ public class LiclHttpUtils {
     }
 
     //???????????为什么是obj 如果返回值不是str怎么办？？
-    private  void sendSuccessCallBack(final ResultCallback callback,final Response r){
+    private  void sendSuccessCallBackString(final ResultCallback<String> callback, final String r){
+        mHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                if(callback!=null){
+                    callback.onSuccess(r);
+                }
+            }
+        });
+    }
+
+    private <T> void sendSuccessCallBack(final ResultCallback<T> callback, final T r){
         mHandler.post(new Runnable() {
             @Override
             public void run() {
@@ -217,7 +233,13 @@ public class LiclHttpUtils {
 
     public static abstract class ResultCallback<T>{
         //用于记录泛型的类型
-        Type mType;
+        Class<T> mType;
+        public ResultCallback(Class<T> c){
+            mType=c;
+        }
+        public Class getType(){
+            return mType;
+        }
         public abstract void onSuccess(T response);
         public abstract void onFailure(Exception e);
 

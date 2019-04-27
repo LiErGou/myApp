@@ -1,11 +1,19 @@
 package com.example.licl.myapplication.network;
 
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Handler;
 import android.os.Looper;
+import android.widget.ImageView;
+
 
 import com.alibaba.fastjson.JSONObject;
+import com.example.licl.myapplication.image.ImageUtils;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -41,7 +49,7 @@ public class LiclHttpUtils {
      * @param url
      * @param callback
      */
-    private void _getSyn(String url, final ResultCallback callback){
+    private void _getAsyn(String url, final ResultCallback callback){
         final Request request=new Request.Builder().url(url).build();
         deliveryResult(callback,request);
     }
@@ -52,7 +60,7 @@ public class LiclHttpUtils {
      * @return
      * @throws IOException
      */
-    private Response _getSyn(String url) throws IOException{
+    private Response _getAsyn(String url) throws IOException{
         Request request=new Request.Builder()
                 .url(url)
                 .build();
@@ -68,7 +76,7 @@ public class LiclHttpUtils {
      * @throws IOException
      */
     private String _getSynString(String url) throws IOException{
-        return _getSyn(url).body().string();
+        return _getAsyn(url).body().string();
     }
 
     /**
@@ -132,7 +140,109 @@ public class LiclHttpUtils {
         _postAsyn(url,callback,JSONObject.toJSONString(t));
     }
 
+    /**
+     * 用于在imageView上展示网络图片
+     * @param view
+     * @param url
+     * @param errorResId
+     */
+    private void _displayImage(final ImageView view, final String url, final int errorResId){
+        Request request=new Request.Builder()
+                .url(url)
+                .build();
+        Call call=mOkHttpClient.newCall(request);
+        call.enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                setErrorResId(view,errorResId);
+            }
 
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                InputStream is=null;
+                try{
+                    is=response.body().byteStream();
+                    ImageUtils.ImageSize actualImageSize=ImageUtils.getImageSize(is);
+                    ImageUtils.ImageSize imageViewSize=ImageUtils.getImageViewSize(view);
+                    int inSampleSize=ImageUtils.calculateInSampleSize(actualImageSize,imageViewSize);
+                    try{
+                        is.reset();
+                    }catch (IOException e){
+                        response= _getAsyn(url);
+                        is=response.body().byteStream();
+                    }
+                    BitmapFactory.Options ops=new BitmapFactory.Options();
+                    ops.inJustDecodeBounds=false;
+                    ops.inSampleSize=inSampleSize;
+                    final Bitmap bm=BitmapFactory.decodeStream(is,null,ops);
+                    mHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            view.setImageBitmap(bm);
+                        }
+                    });
+                }catch (Exception e){
+                    e.printStackTrace();
+                    setErrorResId(view,errorResId);
+                }finally {
+                    if(is!=null)
+                        is.close();
+                }
+            }
+        });
+    }
+
+    private void _downloadAsyn(final String url,final String destFileDir,final ResultCallback callback){
+        final Request request=new Request.Builder()
+                .url(url)
+                .build();
+        final Call call=mOkHttpClient.newCall(request);
+        call.enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                sendFailStringCallback(callback,e);
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                InputStream is=null;
+                byte[] buf=new byte[2048];
+                int len=0;
+                FileOutputStream fos=null;
+                try{
+                    is=response.body().byteStream();
+                    File file=new File(destFileDir,getFileName(url));
+                    fos=new FileOutputStream(file);
+                    while((len=is.read(buf))!=-1){
+                        fos.write(buf,0,len);
+                    }
+                    fos.flush();
+                    sendSuccessCallBackString(callback,file.getAbsolutePath());
+                }catch (IOException e){
+                    sendFailStringCallback(callback,e);
+                }finally {
+                    if(is!=null){
+                        is.close();
+                    }
+                    if(fos!=null){
+                        fos.close();
+                    }
+                }
+            }
+        });
+    }
+    private String getFileName(String path){
+        int separatorIndex=path.lastIndexOf("/");
+        return (separatorIndex<0)?path:path.substring(separatorIndex+1,path.length());
+    }
+    private void setErrorResId(final ImageView view, final int errorResId){
+        mHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                view.setImageResource(errorResId);
+            }
+        });
+    }
 
     /**
      * 构造post请求
@@ -180,7 +290,7 @@ public class LiclHttpUtils {
         mOkHttpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                sendFailCallback(resultCallback,e);
+                sendFailStringCallback(resultCallback,e);
             }
 
             @Override
@@ -197,7 +307,8 @@ public class LiclHttpUtils {
     }
 
 
-    private void sendFailCallback(final ResultCallback callback,final Exception e){
+
+    private void sendFailStringCallback(final ResultCallback<String> callback, final Exception e){
         mHandler.post(new Runnable() {
             @Override
             public void run() {
@@ -274,7 +385,7 @@ public class LiclHttpUtils {
      */
 
     public static Response getSyn(String url) throws IOException {
-        return getInstance()._getSyn(url);
+        return getInstance()._getAsyn(url);
     }
 
     public static String getSynString(String url) throws IOException{
@@ -287,7 +398,7 @@ public class LiclHttpUtils {
      * @param callback
      */
     public static void getAsyn(String url,ResultCallback callback){
-        getInstance()._getSyn(url,callback);
+        getInstance()._getAsyn(url,callback);
     }
 
     /**
@@ -352,6 +463,36 @@ public class LiclHttpUtils {
 
     public static <T> String postSynString(String url,T t) throws IOException{
         return getInstance()._postSyn(url,t).body().string();
+    }
+
+
+    /**
+     * imageview展示图片
+     * @param imageView
+     * @param url
+     */
+    public static void displayImage(final ImageView imageView,String url){
+        getInstance()._displayImage(imageView,url,-1);
+    }
+
+    /**
+     *
+     * @param imageView 目标imageView
+     * @param url   图片url
+     * @param errorImageid 发生错误时的错误图片
+     */
+    public static void displayImage(final ImageView imageView,String url,int errorImageid){
+        getInstance()._displayImage(imageView,url,errorImageid);
+    }
+
+    /**
+     * 下载文件
+     * @param url 目标文件的url
+     * @param desDir 下载的目标路径
+     * @param callback
+     */
+    public static void downloadAsyn(String url,String desDir,ResultCallback callback){
+        getInstance()._downloadAsyn(url,desDir,callback);
     }
 
 }

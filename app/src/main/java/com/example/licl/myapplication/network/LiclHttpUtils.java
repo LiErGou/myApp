@@ -3,16 +3,19 @@ package com.example.licl.myapplication.network;
 import android.os.Handler;
 import android.os.Looper;
 
+import com.alibaba.fastjson.JSONObject;
+
 import java.io.IOException;
-import java.lang.reflect.Type;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.FormBody;
+import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class LiclHttpUtils {
@@ -23,6 +26,7 @@ public class LiclHttpUtils {
     private int WRITE_TIME_OUT=10;
     private int READ_TIME_OUT=30;
     private Handler mHandler;
+    public static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
     private LiclHttpUtils(){
         mOkHttpClient=new OkHttpClient.Builder()
                 .connectTimeout(CONNECT_TIME_OUT,TimeUnit.SECONDS)
@@ -92,6 +96,18 @@ public class LiclHttpUtils {
         return _postSyn(url, map).body().string();
     }
 
+    private Response _postSyn(String url,String json) throws IOException{
+        Response response=mOkHttpClient.newCall(buildPostRequest(url,json)).execute();
+        return response;
+    }
+
+    private String _postSynString(String url,String json) throws IOException{
+        return _postSyn(url,json).body().string();
+    }
+
+    private <T> Response _postSyn(String url,T t) throws IOException{
+        return mOkHttpClient.newCall(buildPostRequest(url,t)).execute();
+    }
     /**
      * 异步的post请求
      * @param url
@@ -106,6 +122,17 @@ public class LiclHttpUtils {
     private void _postAsyn(String url,final ResultCallback callback,Map<String,String> params){
         _postAsyn(url, callback, map2Params(params));
     }
+
+    private void _postAsyn(String url,final ResultCallback callback,String json){
+        Request request=buildPostRequest(url, json);
+        deliveryResult(callback,request);
+    }
+
+    private <T> void _postAsyn(String url,final ResultCallback callback,T t){
+        _postAsyn(url,callback,JSONObject.toJSONString(t));
+    }
+
+
 
     /**
      * 构造post请求
@@ -125,6 +152,20 @@ public class LiclHttpUtils {
         return new Request.Builder().url(url).post(body).build();
     }
 
+    private Request buildPostRequest(String url,String json){
+        RequestBody body=RequestBody.create(JSON,json);
+        Request request=new Request.Builder()
+                .url(url)
+                .post(body)
+                .build();
+        return request;
+    }
+
+    private <T> Request buildPostRequest(String url,T t){
+        String JSONString= JSONObject.toJSONString(t);
+        return buildPostRequest(url,JSONString);
+    }
+
     private Param[] map2Params(Map<String,String> params){
         if(params==null) return new Param[0];
         Param[] res=new Param[params.size()];
@@ -135,7 +176,7 @@ public class LiclHttpUtils {
         return res;
     }
 
-    private void deliveryResult(final ResultCallback resultCallback,Request request){
+    private  void deliveryResult(final ResultCallback resultCallback,Request request){
         mOkHttpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
@@ -144,7 +185,13 @@ public class LiclHttpUtils {
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
-                sendSuccessCallBack(resultCallback,response);
+                Class clazz=resultCallback.getType();
+                if(clazz==String.class){
+                    sendSuccessCallBackString(resultCallback,response.body().string());
+                }else{
+                    sendSuccessCallBack(resultCallback,JSONObject.parseObject(response.body().string(),clazz));
+                }
+
             }
         });
     }
@@ -162,7 +209,18 @@ public class LiclHttpUtils {
     }
 
     //???????????为什么是obj 如果返回值不是str怎么办？？
-    private  void sendSuccessCallBack(final ResultCallback callback,final Response r){
+    private  void sendSuccessCallBackString(final ResultCallback<String> callback, final String r){
+        mHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                if(callback!=null){
+                    callback.onSuccess(r);
+                }
+            }
+        });
+    }
+
+    private <T> void sendSuccessCallBack(final ResultCallback<T> callback, final T r){
         mHandler.post(new Runnable() {
             @Override
             public void run() {
@@ -175,7 +233,13 @@ public class LiclHttpUtils {
 
     public static abstract class ResultCallback<T>{
         //用于记录泛型的类型
-        Type mType;
+        Class<T> mType;
+        public ResultCallback(Class<T> c){
+            mType=c;
+        }
+        public Class getType(){
+            return mType;
+        }
         public abstract void onSuccess(T response);
         public abstract void onFailure(Exception e);
 
@@ -240,6 +304,17 @@ public class LiclHttpUtils {
         getInstance()._postAsyn(url,callback,map);
     }
 
+    public static void postAsyn(String url,ResultCallback callback,String json){
+        getInstance()._postAsyn(url, callback, json);
+    }
+
+    public static <T> void postAsyn(String url,ResultCallback callback,T t){
+        getInstance()._postAsyn(url,callback,t);
+    }
+
+
+
+
     /**
      * 同步的post请求
      * @param url
@@ -261,6 +336,22 @@ public class LiclHttpUtils {
 
     public static String postSynString(String url,Map<String,String> map) throws IOException{
         return getInstance()._postSynString(url,map);
+    }
+
+    public static Response postSyn(String url,String json) throws IOException {
+        return getInstance()._postSyn(url,json);
+    }
+
+    public static String postSynString(String url,String json) throws IOException{
+        return getInstance()._postSynString(url,json);
+    }
+
+    public static <T> Response postSyn(String url,T t) throws IOException {
+        return getInstance()._postSyn(url,t);
+    }
+
+    public static <T> String postSynString(String url,T t) throws IOException{
+        return getInstance()._postSyn(url,t).body().string();
     }
 
 }

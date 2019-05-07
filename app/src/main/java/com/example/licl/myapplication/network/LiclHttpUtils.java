@@ -211,7 +211,8 @@ public class LiclHttpUtils {
                 FileOutputStream fos=null;
                 try{
                     is=response.body().byteStream();
-                    File file=new File(destFileDir,getFileName(url));
+                    File file=new File(destFileDir+getFileName(url));
+                    file.createNewFile();
                     fos=new FileOutputStream(file);
                     while((len=is.read(buf))!=-1){
                         fos.write(buf,0,len);
@@ -295,18 +296,32 @@ public class LiclHttpUtils {
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
-                Class clazz=resultCallback.getType();
-                if(clazz==String.class){
-                    sendSuccessCallBackString(resultCallback,response.body().string());
+                if(response.isSuccessful()){
+                    Class clazz=resultCallback.getType();
+                    if(clazz==String.class){
+                        sendSuccessCallBackString(resultCallback,response.body().string());
+                    }else{
+                        sendSuccessCallBack(resultCallback,JSONObject.parseObject(response.body().string(),clazz));
+                    }
                 }else{
-                    sendSuccessCallBack(resultCallback,JSONObject.parseObject(response.body().string(),clazz));
+                    sendFailStringCallback(resultCallback,"error code:"+response.code());
                 }
+
 
             }
         });
     }
 
-
+    private void sendFailStringCallback(final ResultCallback<String> callback,final String msg){
+        mHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                if(callback!=null){
+                    callback.onFailure(new Exception(msg));
+                }
+            }
+        });
+    }
 
     private void sendFailStringCallback(final ResultCallback<String> callback, final Exception e){
         mHandler.post(new Runnable() {
@@ -318,6 +333,7 @@ public class LiclHttpUtils {
             }
         });
     }
+
 
     //???????????为什么是obj 如果返回值不是str怎么办？？
     private  void sendSuccessCallBackString(final ResultCallback<String> callback, final String r){

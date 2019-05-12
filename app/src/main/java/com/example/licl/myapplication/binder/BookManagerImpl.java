@@ -13,6 +13,9 @@ public class BookManagerImpl extends Binder implements IBookManager {
     public BookManagerImpl(){
         this.attachInterface(this,DESCRIPTOR);
     }
+    //根据传进来的IBinder返回具体的BookManager类型，如果是同一进程的Binder则返回BookManagerImpl
+    // 否则返回其代理
+
     public static IBookManager asInterface(IBinder obj){
         if(obj==null){
             return null;
@@ -24,6 +27,7 @@ public class BookManagerImpl extends Binder implements IBookManager {
         return new Proxy(obj);
     }
 
+    //该方法运行在服务端的线程池中，当客户端发起跨进程请求时，远程请求会通过系统底层封装后调用此方法来处理
     @Override
     protected boolean onTransact(int code,  Parcel data, Parcel reply, int flags) throws RemoteException {
         switch (code){
@@ -69,6 +73,7 @@ public class BookManagerImpl extends Binder implements IBookManager {
         return this;
     }
 
+    //代理类
     private static class Proxy implements IBookManager{
         private IBinder mRemote;
 

@@ -14,6 +14,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.SocketTimeoutException;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -33,6 +34,8 @@ public class LiclHttpUtils {
     private int CONNECT_TIME_OUT=10;
     private int WRITE_TIME_OUT=10;
     private int READ_TIME_OUT=30;
+    //重发的最大次数
+    private int MAX_REMAKE_TIMES=3;
     private Handler mHandler;
     public static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
     private LiclHttpUtils(){
@@ -72,7 +75,7 @@ public class LiclHttpUtils {
     /**
      *
      * @param url
-     * @return同步获取的String
+     * @return 同步获取的String
      * @throws IOException
      */
     private String _getSynString(String url) throws IOException{
@@ -151,10 +154,18 @@ public class LiclHttpUtils {
                 .url(url)
                 .build();
         Call call=mOkHttpClient.newCall(request);
+        final int[] serverLoadTimes = {0};
         call.enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                setErrorResId(view,errorResId);
+                //超时重连
+                if(e instanceof SocketTimeoutException&& serverLoadTimes[0] <MAX_REMAKE_TIMES){
+                    serverLoadTimes[0]++;
+                    call.enqueue(this);
+                }else{
+                    setErrorResId(view,errorResId);
+                }
+
             }
 
             @Override
@@ -197,10 +208,18 @@ public class LiclHttpUtils {
                 .url(url)
                 .build();
         final Call call=mOkHttpClient.newCall(request);
+        final int[] serverLoadTimes=new int[1];
         call.enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                sendFailStringCallback(callback,e);
+                //超时重连
+                if(e instanceof SocketTimeoutException&& serverLoadTimes[0] <MAX_REMAKE_TIMES){
+                    serverLoadTimes[0]++;
+                    call.enqueue(this);
+                }else{
+                    sendFailStringCallback(callback,e);
+                }
+
             }
 
             @Override
@@ -288,10 +307,18 @@ public class LiclHttpUtils {
     }
 
     private  void deliveryResult(final ResultCallback resultCallback,Request request){
+        final int[] serverLoadTimes={0};
         mOkHttpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                sendFailStringCallback(resultCallback,e);
+                //超时重连
+                if(e instanceof SocketTimeoutException&& serverLoadTimes[0] <MAX_REMAKE_TIMES){
+                    serverLoadTimes[0]++;
+                    call.enqueue(this);
+                }else{
+                    sendFailStringCallback(resultCallback,e);
+                }
+
             }
 
             @Override

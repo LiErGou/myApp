@@ -36,7 +36,14 @@
             android:name=".service.MyService"
             android:enabled="true"
             android:exported="true"></service>
-
+<service android:name=".aidlserver.AIDLService"
+    android:enabled="true"
+    android:exported="true">
+    <intent-filter>
+        <action android:name="com.licl.server"/>
+        <!--<category android:name="android.intent.category.DEFAULT"/>-->
+    </intent-filter>
+</service>
     </application>
 
 </manifest>

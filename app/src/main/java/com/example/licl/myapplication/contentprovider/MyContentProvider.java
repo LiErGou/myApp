@@ -41,12 +41,12 @@ public class MyContentProvider extends ContentProvider {
         switch (uriMatcher.match(uri)){
             case BOOK_DIR:
                 //访问数据库的query与contentprovider不同
-                cursor=db.query("Book",projection,selection,selectionArgs,null,null,sortOrder);
+                cursor=db.query("Book2",projection,selection,selectionArgs,null,null,sortOrder);
                 break;
             case BOOK_ITEM:
                 //得到uri中斜线分开的字符串
                 String bookId=uri.getPathSegments().get(1);
-                cursor=db.query("Book",projection,"id=?",new String[]{bookId},null,null,sortOrder);
+                cursor=db.query("Book2",projection,"id=?",new String[]{bookId},null,null,sortOrder);
                 break;
             case CATEGORY_DIR:
                 //访问数据库的query与contentprovider不同

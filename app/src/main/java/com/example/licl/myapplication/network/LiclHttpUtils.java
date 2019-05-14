@@ -295,12 +295,18 @@ public class LiclHttpUtils {
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
-                Class clazz=resultCallback.getType();
-                if(clazz==String.class){
-                    sendSuccessCallBackString(resultCallback,response.body().string());
+//                response.
+                if(response.isSuccessful()){
+                    Class clazz=resultCallback.getType();
+                    if(clazz==String.class){
+                        sendSuccessCallBackString(resultCallback,response.body().string());
+                    }else{
+                        sendSuccessCallBack(resultCallback,JSONObject.parseObject(response.body().string(),clazz));
+                    }
                 }else{
-                    sendSuccessCallBack(resultCallback,JSONObject.parseObject(response.body().string(),clazz));
+                    sendFailStringCallback(resultCallback,response.code());
                 }
+
 
             }
         });
@@ -308,12 +314,23 @@ public class LiclHttpUtils {
 
 
 
-    private void sendFailStringCallback(final ResultCallback<String> callback, final Exception e){
+    private void sendFailStringCallback(final ResultCallback callback, final Exception e){
         mHandler.post(new Runnable() {
             @Override
             public void run() {
                 if(callback!=null){
                     callback.onFailure(e);
+                }
+            }
+        });
+    }
+
+    private void sendFailStringCallback(final ResultCallback callback,final int code){
+        mHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                if(callback!=null){
+                    callback.onFailure(new Exception("网络请求错误"+code));
                 }
             }
         });

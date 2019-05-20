@@ -14,6 +14,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.SocketTimeoutException;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -33,6 +34,8 @@ public class LiclHttpUtils {
     private int CONNECT_TIME_OUT=10;
     private int WRITE_TIME_OUT=10;
     private int READ_TIME_OUT=30;
+    //重发的最大次数
+    private int MAX_REMAKE_TIMES=3;
     private Handler mHandler;
     public static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
     private LiclHttpUtils(){
@@ -72,7 +75,7 @@ public class LiclHttpUtils {
     /**
      *
      * @param url
-     * @return同步获取的String
+     * @return 同步获取的String
      * @throws IOException
      */
     private String _getSynString(String url) throws IOException{
@@ -151,10 +154,18 @@ public class LiclHttpUtils {
                 .url(url)
                 .build();
         Call call=mOkHttpClient.newCall(request);
+        final int[] serverLoadTimes = {0};
         call.enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                setErrorResId(view,errorResId);
+                //超时重连
+                if(e instanceof SocketTimeoutException&& serverLoadTimes[0] <MAX_REMAKE_TIMES){
+                    serverLoadTimes[0]++;
+                    call.enqueue(this);
+                }else{
+                    setErrorResId(view,errorResId);
+                }
+
             }
 
             @Override
@@ -197,10 +208,18 @@ public class LiclHttpUtils {
                 .url(url)
                 .build();
         final Call call=mOkHttpClient.newCall(request);
+        final int[] serverLoadTimes=new int[1];
         call.enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                sendFailStringCallback(callback,e);
+                //超时重连
+                if(e instanceof SocketTimeoutException&& serverLoadTimes[0] <MAX_REMAKE_TIMES){
+                    serverLoadTimes[0]++;
+                    call.enqueue(this);
+                }else{
+                    sendFailStringCallback(callback,e);
+                }
+
             }
 
             @Override
@@ -211,7 +230,8 @@ public class LiclHttpUtils {
                 FileOutputStream fos=null;
                 try{
                     is=response.body().byteStream();
-                    File file=new File(destFileDir,getFileName(url));
+                    File file=new File(destFileDir+getFileName(url));
+                    file.createNewFile();
                     fos=new FileOutputStream(file);
                     while((len=is.read(buf))!=-1){
                         fos.write(buf,0,len);
@@ -287,15 +307,22 @@ public class LiclHttpUtils {
     }
 
     private  void deliveryResult(final ResultCallback resultCallback,Request request){
+        final int[] serverLoadTimes={0};
         mOkHttpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                sendFailStringCallback(resultCallback,e);
+                //超时重连
+                if(e instanceof SocketTimeoutException&& serverLoadTimes[0] <MAX_REMAKE_TIMES){
+                    serverLoadTimes[0]++;
+                    call.enqueue(this);
+                }else{
+                    sendFailStringCallback(resultCallback,e);
+                }
+
             }
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
-//                response.
                 if(response.isSuccessful()){
                     Class clazz=resultCallback.getType();
                     if(clazz==String.class){
@@ -304,7 +331,7 @@ public class LiclHttpUtils {
                         sendSuccessCallBack(resultCallback,JSONObject.parseObject(response.body().string(),clazz));
                     }
                 }else{
-                    sendFailStringCallback(resultCallback,response.code());
+                    sendFailStringCallback(resultCallback,"error code:"+response.code());
                 }
 
 
@@ -312,9 +339,18 @@ public class LiclHttpUtils {
         });
     }
 
+    private void sendFailStringCallback(final ResultCallback<String> callback,final String msg){
+        mHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                if(callback!=null){
+                    callback.onFailure(new Exception(msg));
+                }
+            }
+        });
+    }
 
-
-    private void sendFailStringCallback(final ResultCallback callback, final Exception e){
+    private void sendFailStringCallback(final ResultCallback<String> callback, final Exception e){
         mHandler.post(new Runnable() {
             @Override
             public void run() {
@@ -325,16 +361,6 @@ public class LiclHttpUtils {
         });
     }
 
-    private void sendFailStringCallback(final ResultCallback callback,final int code){
-        mHandler.post(new Runnable() {
-            @Override
-            public void run() {
-                if(callback!=null){
-                    callback.onFailure(new Exception("网络请求错误"+code));
-                }
-            }
-        });
-    }
 
     //???????????为什么是obj 如果返回值不是str怎么办？？
     private  void sendSuccessCallBackString(final ResultCallback<String> callback, final String r){
